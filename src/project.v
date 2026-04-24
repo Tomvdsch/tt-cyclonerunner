@@ -31,6 +31,7 @@ module tt_um_tomvdsch_cyclonerunner (
         .pmod_data  (ui_in[6]),
         .pmod_clk   (ui_in[5]),
         .pmod_latch (ui_in[4]),
+
         .is_present (gamepad_is_present),
         .b          (gamepad_b),
         .y          (gamepad_y),
@@ -65,6 +66,7 @@ module tt_um_tomvdsch_cyclonerunner (
     wire [8:0] obs1_x;
     wire [1:0] obs0_type;
     wire [1:0] obs1_type;
+
     wire [7:0] cloud_x;
     wire [6:0] cloud_y;
 
@@ -88,13 +90,16 @@ module tt_um_tomvdsch_cyclonerunner (
         .jump_btn   (jump_btn),
         .duck_btn   (duck_btn),
         .start_btn  (start_btn),
+
         .player_y   (player_y),
         .ducking    (ducking),
         .game_over  (game_over),
+
         .obs0_x     (obs0_x),
         .obs1_x     (obs1_x),
         .obs0_type  (obs0_type),
         .obs1_type  (obs1_type),
+
         .cloud_x    (cloud_x),
         .cloud_y    (cloud_y)
     );
@@ -105,15 +110,20 @@ module tt_um_tomvdsch_cyclonerunner (
         .pix_x     (pix_x),
         .pix_y     (pix_y),
         .visible   (visible),
+
         .game_over (game_over),
+
         .player_y  (player_y),
         .ducking   (ducking),
+
         .obs0_x    (obs0_x),
         .obs1_x    (obs1_x),
         .obs0_type (obs0_type),
         .obs1_type (obs1_type),
+
         .cloud_x   (cloud_x),
         .cloud_y   (cloud_y),
+
         .rgb       (rgb)
     );
 
@@ -129,7 +139,7 @@ module tt_um_tomvdsch_cyclonerunner (
     assign uio_out = 8'b00000000;
     assign uio_oe  = 8'b00000000;
 
-    wire _unused = &{
+    wire unused = &{
         uio_in,
         ui_in[3:0],
         ui_in[7],
@@ -299,6 +309,7 @@ module game_state (
 
     localparam [6:0] GROUND_Y   = 7'd84;
     localparam [6:0] JUMP_BOOST = 7'd6;
+
     localparam signed [7:0] JUMP_VY = -8'sd5;
 
     localparam [8:0] OBS0_START = 9'd180;
@@ -309,6 +320,7 @@ module game_state (
     localparam [8:0] DESPAWN_X  = 9'd2;
 
     reg [1:0] state;
+
     reg signed [7:0] player_vy;
     reg [7:0] lfsr;
 
@@ -338,8 +350,10 @@ module game_state (
     function [8:0] spawn_after;
         input [8:0] other_x;
         input [4:0] rnd;
+
         reg [8:0] candidate;
         reg [8:0] gap;
+
         begin
             gap = MIN_GAP + {3'd0, rnd, 1'b0};
             candidate = other_x + gap;
@@ -584,51 +598,53 @@ module renderer (
         (sy >= player_top + 7'd3) &&
         (sy <  player_top + 7'd5);
 
-    wire rock_small0 =
-        (obs0_type == 2'd0) &&
-        (
-            ((sx9 >= obs0_x)        && (sx9 < obs0_x + 9'd6) && (sy >= 7'd94) && (sy < 7'd100)) ||
-            ((sx9 >= obs0_x + 9'd1) && (sx9 < obs0_x + 9'd5) && (sy >= 7'd93) && (sy < 7'd94))
-        );
+    wire [8:0] obs0_dx = sx9 - obs0_x;
+    wire [8:0] obs1_dx = sx9 - obs1_x;
 
-    wire rock_small1 =
-        (obs1_type == 2'd0) &&
-        (
-            ((sx9 >= obs1_x)        && (sx9 < obs1_x + 9'd6) && (sy >= 7'd94) && (sy < 7'd100)) ||
-            ((sx9 >= obs1_x + 9'd1) && (sx9 < obs1_x + 9'd5) && (sy >= 7'd93) && (sy < 7'd94))
-        );
+    wire obs0_near = (sx9 >= obs0_x) && (obs0_dx < 9'd10);
+    wire obs1_near = (sx9 >= obs1_x) && (obs1_dx < 9'd10);
 
-    wire rock_big0 =
-        (obs0_type == 2'd2) &&
-        (
-            ((sx9 >= obs0_x)        && (sx9 < obs0_x + 9'd10) && (sy >= 7'd92) && (sy < 7'd100)) ||
-            ((sx9 >= obs0_x + 9'd2) && (sx9 < obs0_x + 9'd8)  && (sy >= 7'd90) && (sy < 7'd92))
-        );
+    function obstacle_pixel;
+        input [1:0] typ;
+        input [3:0] dx;
+        input [6:0] y;
 
-    wire rock_big1 =
-        (obs1_type == 2'd2) &&
-        (
-            ((sx9 >= obs1_x)        && (sx9 < obs1_x + 9'd10) && (sy >= 7'd92) && (sy < 7'd100)) ||
-            ((sx9 >= obs1_x + 9'd2) && (sx9 < obs1_x + 9'd8)  && (sy >= 7'd90) && (sy < 7'd92))
-        );
+        begin
+            case (typ)
+                2'd0: begin
+                    obstacle_pixel =
+                        ((dx < 4'd6) && (y >= 7'd94) && (y < 7'd100)) ||
+                        ((dx >= 4'd1) && (dx < 4'd5) && (y == 7'd93));
+                end
 
-    wire bird0 =
-        (obs0_type == 2'd1) &&
-        (
-            ((sx9 >= obs0_x + 9'd2) && (sx9 < obs0_x + 9'd6) && (sy >= 7'd80) && (sy < 7'd84)) ||
-            ((sx9 >= obs0_x + 9'd1) && (sx9 < obs0_x + 9'd7) && (sy >= 7'd84) && (sy < 7'd86)) ||
-            ((sx9 >= obs0_x)        && (sx9 < obs0_x + 9'd2) && (sy >= 7'd81) && (sy < 7'd83)) ||
-            ((sx9 >= obs0_x + 9'd6) && (sx9 < obs0_x + 9'd8) && (sy >= 7'd82) && (sy < 7'd84))
-        );
+                2'd1: begin
+                    obstacle_pixel =
+                        ((dx >= 4'd2) && (dx < 4'd6) && (y >= 7'd80) && (y < 7'd84)) ||
+                        ((dx >= 4'd1) && (dx < 4'd7) && (y >= 7'd84) && (y < 7'd86)) ||
+                        ((dx < 4'd2) && (y >= 7'd81) && (y < 7'd83)) ||
+                        ((dx >= 4'd6) && (dx < 4'd8) && (y >= 7'd82) && (y < 7'd84));
+                end
 
-    wire bird1 =
-        (obs1_type == 2'd1) &&
-        (
-            ((sx9 >= obs1_x + 9'd2) && (sx9 < obs1_x + 9'd6) && (sy >= 7'd80) && (sy < 7'd84)) ||
-            ((sx9 >= obs1_x + 9'd1) && (sx9 < obs1_x + 9'd7) && (sy >= 7'd84) && (sy < 7'd86)) ||
-            ((sx9 >= obs1_x)        && (sx9 < obs1_x + 9'd2) && (sy >= 7'd81) && (sy < 7'd83)) ||
-            ((sx9 >= obs1_x + 9'd6) && (sx9 < obs1_x + 9'd8) && (sy >= 7'd82) && (sy < 7'd84))
-        );
+                default: begin
+                    obstacle_pixel =
+                        ((dx < 4'd10) && (y >= 7'd92) && (y < 7'd100)) ||
+                        ((dx >= 4'd2) && (dx < 4'd8) && (y >= 7'd90) && (y < 7'd92));
+                end
+            endcase
+        end
+    endfunction
+
+    wire obs0_pixel = obs0_near && obstacle_pixel(obs0_type, obs0_dx[3:0], sy);
+    wire obs1_pixel = obs1_near && obstacle_pixel(obs1_type, obs1_dx[3:0], sy);
+
+    wire obs_small = ((obs0_type == 2'd0) && obs0_pixel) ||
+                     ((obs1_type == 2'd0) && obs1_pixel);
+
+    wire obs_bird = ((obs0_type == 2'd1) && obs0_pixel) ||
+                    ((obs1_type == 2'd1) && obs1_pixel);
+
+    wire obs_big = ((obs0_type == 2'd2) && obs0_pixel) ||
+                   ((obs1_type == 2'd2) && obs1_pixel);
 
     wire cloud =
         (
@@ -669,11 +685,11 @@ module renderer (
             rgb = 6'b000000;
         else if (visible && (cloud || player_eye))
             rgb = 6'b111111;
-        else if (visible && (rock_small0 || rock_small1))
+        else if (visible && obs_small)
             rgb = 6'b101010;
-        else if (visible && (rock_big0 || rock_big1))
+        else if (visible && obs_big)
             rgb = 6'b010101;
-        else if (visible && (bird0 || bird1))
+        else if (visible && obs_bird)
             rgb = 6'b000000;
         else if (visible && (player || player_head || player_leg_l || player_leg_r))
             rgb = 6'b100000;
