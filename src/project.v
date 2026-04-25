@@ -720,34 +720,24 @@ module audio_engine (
     output reg  audio_pwm
 );
 
-    localparam [4:0] PRESCALE_MAX = 5'd24;
+    localparam [4:0]  PRESCALE_MAX = 5'd24;
     localparam [12:0] H_REST = 13'd0;
-    localparam [12:0] H_A2   = 13'd4545; //110.00 Hz
-    localparam [12:0] H_C3   = 13'd3822; //130.81 Hz
-    localparam [12:0] H_D3   = 13'd3405; //146.83 Hz
-    localparam [12:0] H_E3   = 13'd3034; //164.81 Hz
-    localparam [12:0] H_G3   = 13'd2551; //196.00 Hz
-    localparam [12:0] H_A3   = 13'd2273; //220.00 Hz
+    localparam [12:0] H_A2   = 13'd4545;
+    localparam [12:0] H_C3   = 13'd3822;
+    localparam [12:0] H_D3   = 13'd3405;
+    localparam [12:0] H_E3   = 13'd3034;
+    localparam [12:0] H_G3   = 13'd2551;
+    localparam [12:0] H_A3   = 13'd2273;
     localparam [2:0] STEP_FRAMES = 3'd7;
-    localparam [6:0] PWM_TOP     = 7'd99;
-    localparam [6:0] PWM_CENTER  = 7'd50;
-    localparam [6:0] PWM_HIGH    = 7'd70;
-    localparam [6:0] PWM_LOW     = 7'd30;
 
     reg [4:0]  prescale_cnt;
     reg        audio_tick;
-
-    reg [6:0]  pwm_cnt;
-    reg [6:0]  pwm_duty;
-
     reg [2:0]  frame_div;
     reg [3:0]  idx;
     reg        game_prev;
     reg        game_jingle;
-
     reg [12:0] half_period;
     reg [12:0] tone_cnt;
-    reg        tone_level;
 
     always @* begin
         if (game_jingle) begin
@@ -758,7 +748,6 @@ module audio_engine (
                 3'd3: half_period = H_E3;
                 3'd4: half_period = H_C3;
                 3'd5: half_period = H_C3;
-                3'd6: half_period = H_A2;
                 default: half_period = H_A2;
             endcase
         end else begin
@@ -777,7 +766,6 @@ module audio_engine (
                 4'd11: half_period = H_E3;
                 4'd12: half_period = H_G3;
                 4'd13: half_period = H_G3;
-                4'd14: half_period = H_E3;
                 default: half_period = H_E3;
             endcase
         end
@@ -787,14 +775,12 @@ module audio_engine (
         if (!rst_n) begin
             prescale_cnt <= 5'd0;
             audio_tick   <= 1'b0;
+        end else if (prescale_cnt == PRESCALE_MAX) begin
+            prescale_cnt <= 5'd0;
+            audio_tick   <= 1'b1;
         end else begin
-            if (prescale_cnt == PRESCALE_MAX) begin
-                prescale_cnt <= 5'd0;
-                audio_tick   <= 1'b1;
-            end else begin
-                prescale_cnt <= prescale_cnt + 5'd1;
-                audio_tick   <= 1'b0;
-            end
+            prescale_cnt <= prescale_cnt + 5'd1;
+            audio_tick   <= 1'b0;
         end
     end
 
@@ -805,7 +791,7 @@ module audio_engine (
             game_prev   <= 1'b0;
             game_jingle <= 1'b0;
             tone_cnt    <= 13'd0;
-            tone_level  <= 1'b0;
+            audio_pwm   <= 1'b0;
         end else begin
             game_prev <= game_over;
 
@@ -814,7 +800,7 @@ module audio_engine (
                 idx         <= 4'd0;
                 frame_div   <= 3'd0;
                 tone_cnt    <= 13'd0;
-                tone_level  <= 1'b0;
+                audio_pwm   <= 1'b0;
             end
 
             if (frame_tick) begin
@@ -836,38 +822,15 @@ module audio_engine (
 
             if (audio_tick) begin
                 if ((half_period == H_REST) || (game_over && !game_jingle)) begin
-                    tone_cnt   <= 13'd0;
-                    tone_level <= 1'b0;
+                    tone_cnt  <= 13'd0;
+                    audio_pwm <= 1'b0;
                 end else if (tone_cnt >= half_period) begin
-                    tone_cnt   <= 13'd0;
-                    tone_level <= ~tone_level;
+                    tone_cnt  <= 13'd0;
+                    audio_pwm <= ~audio_pwm;
                 end else begin
                     tone_cnt <= tone_cnt + 13'd1;
                 end
             end
-        end
-    end
-
-    always @* begin
-        if ((half_period == H_REST) || (game_over && !game_jingle))
-            pwm_duty = PWM_CENTER;
-        else if (tone_level)
-            pwm_duty = PWM_HIGH;
-        else
-            pwm_duty = PWM_LOW;
-    end
-
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            pwm_cnt   <= 7'd0;
-            audio_pwm <= 1'b0;
-        end else begin
-            if (pwm_cnt == PWM_TOP)
-                pwm_cnt <= 7'd0;
-            else
-                pwm_cnt <= pwm_cnt + 7'd1;
-
-            audio_pwm <= (pwm_cnt < pwm_duty);
         end
     end
 
