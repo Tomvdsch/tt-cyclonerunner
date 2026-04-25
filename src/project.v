@@ -71,6 +71,7 @@ module tt_um_tomvdsch_cyclonerunner (
     wire [6:0] cloud_y;
 
     wire [5:0] rgb;
+    wire       audio_pwm;
 
     vga_timing u_vga_timing (
         .clk        (clk),
@@ -127,6 +128,14 @@ module tt_um_tomvdsch_cyclonerunner (
         .rgb       (rgb)
     );
 
+    audio_engine u_audio_engine (
+        .clk        (clk),
+        .rst_n      (core_rst_n),
+        .frame_tick (frame_tick),
+        .game_over  (game_over),
+        .audio_pwm  (audio_pwm)
+    );
+
     assign uo_out[0] = rgb[5];
     assign uo_out[1] = rgb[3];
     assign uo_out[2] = rgb[1];
@@ -135,9 +144,8 @@ module tt_um_tomvdsch_cyclonerunner (
     assign uo_out[5] = rgb[2];
     assign uo_out[6] = rgb[0];
     assign uo_out[7] = hsync;
-
-    assign uio_out = 8'b00000000;
-    assign uio_oe  = 8'b00000000;
+    assign uio_out = {audio_pwm, 7'b0000000};
+    assign uio_oe  = 8'b10000000;
 
     wire unused = &{
         uio_in,
@@ -296,7 +304,7 @@ module game_state (
 
     output reg  [8:0] obs0_x,
     output reg  [8:0] obs1_x,
-    output reg  [1:0] obs0_type,
+    output reg  [1:0] obs0_type, //0 = small rock, 1 = big rock, 2 = bird
     output reg  [1:0] obs1_type,
 
     output reg  [7:0] cloud_x,
@@ -699,6 +707,168 @@ module renderer (
             rgb = 6'b100100;
         else if (visible)
             rgb = 6'b011011;
+    end
+
+endmodule
+
+
+module audio_engine (
+    input  wire clk,
+    input  wire rst_n,
+    input  wire frame_tick,
+    input  wire game_over,
+    output reg  audio_pwm
+);
+
+    localparam [4:0] PRESCALE_MAX = 5'd24;
+    localparam [12:0] H_REST = 13'd0;
+    localparam [12:0] H_A2   = 13'd4545; //110.00 Hz
+    localparam [12:0] H_C3   = 13'd3822; //130.81 Hz
+    localparam [12:0] H_D3   = 13'd3405; //146.83 Hz
+    localparam [12:0] H_E3   = 13'd3034; //164.81 Hz
+    localparam [12:0] H_G3   = 13'd2551; //196.00 Hz
+    localparam [12:0] H_A3   = 13'd2273; //220.00 Hz
+    localparam [2:0] STEP_FRAMES = 3'd7;
+    localparam [6:0] PWM_TOP     = 7'd99;
+    localparam [6:0] PWM_CENTER  = 7'd50;
+    localparam [6:0] PWM_HIGH    = 7'd70;
+    localparam [6:0] PWM_LOW     = 7'd30;
+
+    reg [4:0]  prescale_cnt;
+    reg        audio_tick;
+
+    reg [6:0]  pwm_cnt;
+    reg [6:0]  pwm_duty;
+
+    reg [2:0]  frame_div;
+    reg [3:0]  idx;
+    reg        game_prev;
+    reg        game_jingle;
+
+    reg [12:0] half_period;
+    reg [12:0] tone_cnt;
+    reg        tone_level;
+
+    always @* begin
+        if (game_jingle) begin
+            case (idx[2:0])
+                3'd0: half_period = H_A3;
+                3'd1: half_period = H_A3;
+                3'd2: half_period = H_E3;
+                3'd3: half_period = H_E3;
+                3'd4: half_period = H_C3;
+                3'd5: half_period = H_C3;
+                3'd6: half_period = H_A2;
+                default: half_period = H_A2;
+            endcase
+        end else begin
+            case (idx)
+                4'd0:  half_period = H_A2;
+                4'd1:  half_period = H_A2;
+                4'd2:  half_period = H_REST;
+                4'd3:  half_period = H_A2;
+                4'd4:  half_period = H_C3;
+                4'd5:  half_period = H_C3;
+                4'd6:  half_period = H_REST;
+                4'd7:  half_period = H_REST;
+                4'd8:  half_period = H_D3;
+                4'd9:  half_period = H_D3;
+                4'd10: half_period = H_REST;
+                4'd11: half_period = H_E3;
+                4'd12: half_period = H_G3;
+                4'd13: half_period = H_G3;
+                4'd14: half_period = H_E3;
+                default: half_period = H_E3;
+            endcase
+        end
+    end
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            prescale_cnt <= 5'd0;
+            audio_tick   <= 1'b0;
+        end else begin
+            if (prescale_cnt == PRESCALE_MAX) begin
+                prescale_cnt <= 5'd0;
+                audio_tick   <= 1'b1;
+            end else begin
+                prescale_cnt <= prescale_cnt + 5'd1;
+                audio_tick   <= 1'b0;
+            end
+        end
+    end
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            idx         <= 4'd0;
+            frame_div   <= 3'd0;
+            game_prev   <= 1'b0;
+            game_jingle <= 1'b0;
+            tone_cnt    <= 13'd0;
+            tone_level  <= 1'b0;
+        end else begin
+            game_prev <= game_over;
+
+            if (game_over && !game_prev) begin
+                game_jingle <= 1'b1;
+                idx         <= 4'd0;
+                frame_div   <= 3'd0;
+                tone_cnt    <= 13'd0;
+                tone_level  <= 1'b0;
+            end
+
+            if (frame_tick) begin
+                if (frame_div == STEP_FRAMES - 3'd1) begin
+                    frame_div <= 3'd0;
+
+                    if (game_jingle) begin
+                        if (idx == 4'd7)
+                            game_jingle <= 1'b0;
+                        else
+                            idx <= idx + 4'd1;
+                    end else if (!game_over) begin
+                        idx <= idx + 4'd1;
+                    end
+                end else begin
+                    frame_div <= frame_div + 3'd1;
+                end
+            end
+
+            if (audio_tick) begin
+                if ((half_period == H_REST) || (game_over && !game_jingle)) begin
+                    tone_cnt   <= 13'd0;
+                    tone_level <= 1'b0;
+                end else if (tone_cnt >= half_period) begin
+                    tone_cnt   <= 13'd0;
+                    tone_level <= ~tone_level;
+                end else begin
+                    tone_cnt <= tone_cnt + 13'd1;
+                end
+            end
+        end
+    end
+
+    always @* begin
+        if ((half_period == H_REST) || (game_over && !game_jingle))
+            pwm_duty = PWM_CENTER;
+        else if (tone_level)
+            pwm_duty = PWM_HIGH;
+        else
+            pwm_duty = PWM_LOW;
+    end
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            pwm_cnt   <= 7'd0;
+            audio_pwm <= 1'b0;
+        end else begin
+            if (pwm_cnt == PWM_TOP)
+                pwm_cnt <= 7'd0;
+            else
+                pwm_cnt <= pwm_cnt + 7'd1;
+
+            audio_pwm <= (pwm_cnt < pwm_duty);
+        end
     end
 
 endmodule
