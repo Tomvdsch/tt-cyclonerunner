@@ -725,17 +725,15 @@ module audio_engine (
     localparam [12:0] H_C3       = 13'd3822;
     localparam [12:0] H_D3       = 13'd3405;
     localparam [12:0] H_E3       = 13'd3034;
-    localparam [12:0] H_G3       = 13'd2551;
     localparam [2:0] STEP_FRAMES = 3'd7;
 
     reg [4:0]  prescale_cnt;
-    reg        audio_tick;
     reg [2:0]  frame_div;
     reg [3:0]  idx;
     reg        game_prev;
     reg        game_beep;
-    reg [12:0] half_period;
     reg [12:0] tone_cnt;
+    reg [12:0] half_period;
 
     always @* begin
         if (game_beep) begin
@@ -754,8 +752,8 @@ module audio_engine (
                 4'd9:  half_period = H_D3;
                 4'd10: half_period = H_REST;
                 4'd11: half_period = H_E3;
-                4'd12: half_period = H_G3;
-                4'd13: half_period = H_G3;
+                4'd12: half_period = H_A2;
+                4'd13: half_period = H_A2;
                 default: half_period = H_E3;
             endcase
         end
@@ -764,18 +762,6 @@ module audio_engine (
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             prescale_cnt <= 5'd0;
-            audio_tick   <= 1'b0;
-        end else if (prescale_cnt == PRESCALE_MAX) begin
-            prescale_cnt <= 5'd0;
-            audio_tick   <= 1'b1;
-        end else begin
-            prescale_cnt <= prescale_cnt + 5'd1;
-            audio_tick   <= 1'b0;
-        end
-    end
-
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
             idx          <= 4'd0;
             frame_div    <= 3'd0;
             game_prev    <= 1'b0;
@@ -793,24 +779,21 @@ module audio_engine (
             end
 
             if (frame_tick) begin
-                if (game_beep) begin
-                    if (frame_div == STEP_FRAMES - 3'd1) begin
-                        frame_div <= 3'd0;
+                if (frame_div == STEP_FRAMES - 3'd1) begin
+                    frame_div <= 3'd0;
+
+                    if (game_beep)
                         game_beep <= 1'b0;
-                    end else begin
-                        frame_div <= frame_div + 3'd1;
-                    end
-                end else if (!game_over) begin
-                    if (frame_div == STEP_FRAMES - 3'd1) begin
-                        frame_div <= 3'd0;
+                    else if (!game_over)
                         idx <= idx + 4'd1;
-                    end else begin
-                        frame_div <= frame_div + 3'd1;
-                    end
+                end else begin
+                    frame_div <= frame_div + 3'd1;
                 end
             end
 
-            if (audio_tick) begin
+            if (prescale_cnt == PRESCALE_MAX) begin
+                prescale_cnt <= 5'd0;
+
                 if ((half_period == H_REST) || (game_over && !game_beep)) begin
                     tone_cnt  <= 13'd0;
                     audio_pwm <= 1'b0;
@@ -820,6 +803,8 @@ module audio_engine (
                 end else begin
                     tone_cnt <= tone_cnt + 13'd1;
                 end
+            end else begin
+                prescale_cnt <= prescale_cnt + 5'd1;
             end
         end
     end
