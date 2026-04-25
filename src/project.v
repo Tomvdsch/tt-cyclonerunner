@@ -72,6 +72,7 @@ module tt_um_tomvdsch_cyclonerunner (
 
     wire [5:0] rgb;
     wire       audio_pwm;
+    wire audio_tick = (pix_x[4:0] == 5'd0);
 
     vga_timing u_vga_timing (
         .clk        (clk),
@@ -132,6 +133,7 @@ module tt_um_tomvdsch_cyclonerunner (
         .clk        (clk),
         .rst_n      (core_rst_n),
         .frame_tick (frame_tick),
+        .audio_tick (audio_tick),
         .game_over  (game_over),
         .audio_pwm  (audio_pwm)
     );
@@ -715,25 +717,24 @@ module audio_engine (
     input  wire clk,
     input  wire rst_n,
     input  wire frame_tick,
+    input  wire audio_tick,
     input  wire game_over,
     output reg  audio_pwm
 );
 
-    localparam [4:0]  PRESCALE_MAX = 5'd24; 
-    localparam [12:0] H_REST = 13'd0;
-    localparam [12:0] H_A2   = 13'd4545;
-    localparam [12:0] H_B2   = 13'd4050;
-    localparam [12:0] H_C3   = 13'd3822;
+    localparam [11:0] H_REST = 12'd0;
+    localparam [11:0] H_A2   = 12'd3551;
+    localparam [11:0] H_B2   = 12'd3164;
+    localparam [11:0] H_C3   = 12'd2986;
     localparam [2:0] STEP_FRAMES = 3'd7;
 
-    reg [4:0]  prescale_cnt;
-    reg [2:0]  frame_div;
-    reg [2:0]  idx;
-    reg        game_prev;
-    reg        game_beep;
-    reg        rand_bit;
-    reg [12:0] tone_cnt;
-    reg [12:0] half_period;
+    reg [2:0] frame_div;
+    reg [2:0] idx;
+    reg       game_prev;
+    reg       game_beep;
+    reg       rand_bit;
+    reg [11:0] tone_cnt;
+    reg [11:0] half_period;
 
     always @* begin
         if (game_beep) begin
@@ -754,21 +755,20 @@ module audio_engine (
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            prescale_cnt <= 5'd0;
-            idx          <= 3'd0;
-            frame_div    <= 3'd0;
-            game_prev    <= 1'b0;
-            game_beep    <= 1'b0;
-            rand_bit     <= 1'b0;
-            tone_cnt     <= 13'd0;
-            audio_pwm    <= 1'b0;
+            idx       <= 3'd0;
+            frame_div <= 3'd0;
+            game_prev <= 1'b0;
+            game_beep <= 1'b0;
+            rand_bit  <= 1'b0;
+            tone_cnt  <= 12'd0;
+            audio_pwm <= 1'b0;
         end else begin
             game_prev <= game_over;
 
             if (game_over && !game_prev) begin
                 game_beep <= 1'b1;
                 frame_div <= 3'd0;
-                tone_cnt  <= 13'd0;
+                tone_cnt  <= 12'd0;
                 audio_pwm <= 1'b0;
             end
 
@@ -786,20 +786,16 @@ module audio_engine (
                 end
             end
 
-            if (prescale_cnt == PRESCALE_MAX) begin
-                prescale_cnt <= 5'd0;
-
+            if (audio_tick) begin
                 if ((half_period == H_REST) || (game_over && !game_beep)) begin
-                    tone_cnt  <= 13'd0;
+                    tone_cnt  <= 12'd0;
                     audio_pwm <= 1'b0;
                 end else if (tone_cnt >= half_period) begin
-                    tone_cnt  <= 13'd0;
+                    tone_cnt  <= 12'd0;
                     audio_pwm <= ~audio_pwm;
                 end else begin
-                    tone_cnt <= tone_cnt + 13'd1;
+                    tone_cnt <= tone_cnt + 12'd1;
                 end
-            end else begin
-                prescale_cnt <= prescale_cnt + 5'd1;
             end
         end
     end
