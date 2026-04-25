@@ -711,7 +711,6 @@ module renderer (
 
 endmodule
 
-
 module audio_engine (
     input  wire clk,
     input  wire rst_n,
@@ -721,13 +720,12 @@ module audio_engine (
 );
 
     localparam [4:0]  PRESCALE_MAX = 5'd24;
-    localparam [12:0] H_REST = 13'd0;
-    localparam [12:0] H_A2   = 13'd4545;
-    localparam [12:0] H_C3   = 13'd3822;
-    localparam [12:0] H_D3   = 13'd3405;
-    localparam [12:0] H_E3   = 13'd3034;
-    localparam [12:0] H_G3   = 13'd2551;
-    localparam [12:0] H_A3   = 13'd2273;
+    localparam [12:0] H_REST     = 13'd0;
+    localparam [12:0] H_A2       = 13'd4545;
+    localparam [12:0] H_C3       = 13'd3822;
+    localparam [12:0] H_D3       = 13'd3405;
+    localparam [12:0] H_E3       = 13'd3034;
+    localparam [12:0] H_G3       = 13'd2551;
     localparam [2:0] STEP_FRAMES = 3'd7;
 
     reg [4:0]  prescale_cnt;
@@ -735,21 +733,13 @@ module audio_engine (
     reg [2:0]  frame_div;
     reg [3:0]  idx;
     reg        game_prev;
-    reg        game_jingle;
+    reg        game_beep;
     reg [12:0] half_period;
     reg [12:0] tone_cnt;
 
     always @* begin
-        if (game_jingle) begin
-            case (idx[2:0])
-                3'd0: half_period = H_A3;
-                3'd1: half_period = H_A3;
-                3'd2: half_period = H_E3;
-                3'd3: half_period = H_E3;
-                3'd4: half_period = H_C3;
-                3'd5: half_period = H_C3;
-                default: half_period = H_A2;
-            endcase
+        if (game_beep) begin
+            half_period = H_A2;
         end else begin
             case (idx)
                 4'd0:  half_period = H_A2;
@@ -786,42 +776,42 @@ module audio_engine (
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            idx         <= 4'd0;
-            frame_div   <= 3'd0;
-            game_prev   <= 1'b0;
-            game_jingle <= 1'b0;
-            tone_cnt    <= 13'd0;
-            audio_pwm   <= 1'b0;
+            idx          <= 4'd0;
+            frame_div    <= 3'd0;
+            game_prev    <= 1'b0;
+            game_beep    <= 1'b0;
+            tone_cnt     <= 13'd0;
+            audio_pwm    <= 1'b0;
         end else begin
             game_prev <= game_over;
 
             if (game_over && !game_prev) begin
-                game_jingle <= 1'b1;
-                idx         <= 4'd0;
-                frame_div   <= 3'd0;
-                tone_cnt    <= 13'd0;
-                audio_pwm   <= 1'b0;
+                game_beep <= 1'b1;
+                frame_div <= 3'd0;
+                tone_cnt  <= 13'd0;
+                audio_pwm <= 1'b0;
             end
 
             if (frame_tick) begin
-                if (frame_div == STEP_FRAMES - 3'd1) begin
-                    frame_div <= 3'd0;
-
-                    if (game_jingle) begin
-                        if (idx == 4'd7)
-                            game_jingle <= 1'b0;
-                        else
-                            idx <= idx + 4'd1;
-                    end else if (!game_over) begin
-                        idx <= idx + 4'd1;
+                if (game_beep) begin
+                    if (frame_div == STEP_FRAMES - 3'd1) begin
+                        frame_div <= 3'd0;
+                        game_beep <= 1'b0;
+                    end else begin
+                        frame_div <= frame_div + 3'd1;
                     end
-                end else begin
-                    frame_div <= frame_div + 3'd1;
+                end else if (!game_over) begin
+                    if (frame_div == STEP_FRAMES - 3'd1) begin
+                        frame_div <= 3'd0;
+                        idx <= idx + 4'd1;
+                    end else begin
+                        frame_div <= frame_div + 3'd1;
+                    end
                 end
             end
 
             if (audio_tick) begin
-                if ((half_period == H_REST) || (game_over && !game_jingle)) begin
+                if ((half_period == H_REST) || (game_over && !game_beep)) begin
                     tone_cnt  <= 13'd0;
                     audio_pwm <= 1'b0;
                 end else if (tone_cnt >= half_period) begin
