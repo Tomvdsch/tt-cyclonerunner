@@ -719,19 +719,19 @@ module audio_engine (
     output reg  audio_pwm
 );
 
-    localparam [4:0]  PRESCALE_MAX = 5'd24;
-    localparam [12:0] H_REST     = 13'd0;
-    localparam [12:0] H_A2       = 13'd4545;
-    localparam [12:0] H_C3       = 13'd3822;
-    localparam [12:0] H_D3       = 13'd3405;
-    localparam [12:0] H_E3       = 13'd3034;
+    localparam [4:0]  PRESCALE_MAX = 5'd24; 
+    localparam [12:0] H_REST = 13'd0;
+    localparam [12:0] H_A2   = 13'd4545;
+    localparam [12:0] H_B2   = 13'd4050;
+    localparam [12:0] H_C3   = 13'd3822;
     localparam [2:0] STEP_FRAMES = 3'd7;
 
     reg [4:0]  prescale_cnt;
     reg [2:0]  frame_div;
-    reg [3:0]  idx;
+    reg [2:0]  idx;
     reg        game_prev;
     reg        game_beep;
+    reg        rand_bit;
     reg [12:0] tone_cnt;
     reg [12:0] half_period;
 
@@ -740,21 +740,14 @@ module audio_engine (
             half_period = H_A2;
         end else begin
             case (idx)
-                4'd0:  half_period = H_A2;
-                4'd1:  half_period = H_A2;
-                4'd2:  half_period = H_REST;
-                4'd3:  half_period = H_A2;
-                4'd4:  half_period = H_C3;
-                4'd5:  half_period = H_C3;
-                4'd6:  half_period = H_REST;
-                4'd7:  half_period = H_REST;
-                4'd8:  half_period = H_D3;
-                4'd9:  half_period = H_D3;
-                4'd10: half_period = H_REST;
-                4'd11: half_period = H_E3;
-                4'd12: half_period = H_A2;
-                4'd13: half_period = H_A2;
-                default: half_period = H_E3;
+                3'd0: half_period = H_A2;
+                3'd1: half_period = H_REST;
+                3'd2: half_period = rand_bit ? H_B2 : H_A2;
+                3'd3: half_period = H_A2;
+                3'd4: half_period = H_REST;
+                3'd5: half_period = H_C3;
+                3'd6: half_period = rand_bit ? H_A2 : H_B2;
+                default: half_period = H_REST;
             endcase
         end
     end
@@ -762,10 +755,11 @@ module audio_engine (
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             prescale_cnt <= 5'd0;
-            idx          <= 4'd0;
+            idx          <= 3'd0;
             frame_div    <= 3'd0;
             game_prev    <= 1'b0;
             game_beep    <= 1'b0;
+            rand_bit     <= 1'b0;
             tone_cnt     <= 13'd0;
             audio_pwm    <= 1'b0;
         end else begin
@@ -781,11 +775,12 @@ module audio_engine (
             if (frame_tick) begin
                 if (frame_div == STEP_FRAMES - 3'd1) begin
                     frame_div <= 3'd0;
+                    rand_bit  <= rand_bit ^ idx[0] ^ game_over;
 
                     if (game_beep)
                         game_beep <= 1'b0;
                     else if (!game_over)
-                        idx <= idx + 4'd1;
+                        idx <= idx + 3'd1;
                 end else begin
                     frame_div <= frame_div + 3'd1;
                 end
