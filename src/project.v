@@ -12,18 +12,9 @@ module tt_um_tomvdsch_cyclonerunner (
     wire core_rst_n = rst_n & ena;
 
     wire gamepad_is_present;
-    wire gamepad_b;
-    wire gamepad_y;
-    wire gamepad_select;
     wire gamepad_start;
     wire gamepad_up;
     wire gamepad_down;
-    wire gamepad_left;
-    wire gamepad_right;
-    wire gamepad_a;
-    wire gamepad_x;
-    wire gamepad_l;
-    wire gamepad_r;
 
     gamepad_pmod_single gamepad (
         .rst_n      (core_rst_n),
@@ -31,20 +22,11 @@ module tt_um_tomvdsch_cyclonerunner (
         .pmod_data  (ui_in[6]),
         .pmod_clk   (ui_in[5]),
         .pmod_latch (ui_in[4]),
-
+    
         .is_present (gamepad_is_present),
-        .b          (gamepad_b),
-        .y          (gamepad_y),
-        .select     (gamepad_select),
         .start      (gamepad_start),
         .up         (gamepad_up),
-        .down       (gamepad_down),
-        .left       (gamepad_left),
-        .right      (gamepad_right),
-        .a          (gamepad_a),
-        .x          (gamepad_x),
-        .l          (gamepad_l),
-        .r          (gamepad_r)
+        .down       (gamepad_down)
     );
 
     wire jump_btn  = gamepad_up;
@@ -173,18 +155,9 @@ module gamepad_pmod_single (
     input  wire pmod_latch,
 
     output wire is_present,
-    output wire b,
-    output wire y,
-    output wire select,
     output wire start,
     output wire up,
-    output wire down,
-    output wire left,
-    output wire right,
-    output wire a,
-    output wire x,
-    output wire l,
-    output wire r
+    output wire down
 );
 
     reg [1:0] data_sync;
@@ -194,12 +167,14 @@ module gamepad_pmod_single (
     reg clk_last;
     reg latch_last;
 
-    reg [11:0] shift_reg;
-    reg [11:0] buttons;
+    reg [8:0] shift_reg;
+    reg [2:0] buttons;
+    reg       present;
 
     wire clk_rise   = clk_sync[1] & ~clk_last;
     wire latch_rise = latch_sync[1] & ~latch_last;
-    wire empty      = buttons == 12'hfff;
+
+    wire empty = shift_reg == 9'h1ff;
 
     always @(posedge clk) begin
         if (!rst_n) begin
@@ -217,24 +192,25 @@ module gamepad_pmod_single (
         if (!rst_n) begin
             clk_last   <= 1'b0;
             latch_last <= 1'b0;
-            shift_reg  <= 12'hfff;
-            buttons    <= 12'hfff;
+            shift_reg  <= 9'h1ff;
+            buttons    <= 3'b000;
+            present    <= 1'b0;
         end else begin
             clk_last   <= clk_sync[1];
             latch_last <= latch_sync[1];
 
             if (clk_rise)
-                shift_reg <= {shift_reg[10:0], data_sync[1]};
+                shift_reg <= {shift_reg[7:0], data_sync[1]};
 
-            if (latch_rise)
-                buttons <= shift_reg;
+            if (latch_rise) begin
+                present <= !empty;
+                buttons <= empty ? 3'b000 : shift_reg[8:6];
+            end
         end
     end
 
-    assign is_present = !empty;
-
-    assign {b, y, select, start, up, down, left, right, a, x, l, r} =
-        empty ? 12'b000000000000 : buttons;
+    assign is_present = present;
+    assign {start, up, down} = buttons;
 
 endmodule
 
@@ -306,7 +282,7 @@ module game_state (
 
     output reg  [8:0] obs0_x,
     output reg  [8:0] obs1_x,
-    output reg  [1:0] obs0_type, //0 = small rock, 1 = big rock, 2 = bird
+    output reg  [1:0] obs0_type, //0 = small rock, 1 = bird, 2 = big rock,
     output reg  [1:0] obs1_type,
 
     output reg  [7:0] cloud_x,
@@ -477,10 +453,7 @@ module game_state (
                 end
 
                 default: begin
-                    if (start_edge) begin
-                        state <= S_RUN;
-                        reset_run;
-                    end else if (hit_obs0 || hit_obs1) begin
+                    if (hit_obs0 || hit_obs1) begin
                         state     <= S_GAME_OVER;
                         player_vy <= 8'sd0;
                     end else begin
