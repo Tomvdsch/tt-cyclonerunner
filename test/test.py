@@ -5,7 +5,48 @@ import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import ClockCycles
 
+PMOD_LATCH = 1 << 4
+PMOD_CLK   = 1 << 5
+PMOD_DATA  = 1 << 6
 
+BTN_B      = 1 << 11
+BTN_Y      = 1 << 10
+BTN_SELECT = 1 << 9
+BTN_START  = 1 << 8
+BTN_UP     = 1 << 7
+BTN_DOWN   = 1 << 6
+BTN_LEFT   = 1 << 5
+BTN_RIGHT  = 1 << 4
+BTN_A      = 1 << 3
+BTN_X      = 1 << 2
+BTN_L      = 1 << 1
+BTN_R      = 1 << 0
+
+def get_hsync(uo_out):
+    return (int(uo_out) >> 7) & 1
+
+
+def get_vsync(uo_out):
+    return (int(uo_out) >> 3) & 1
+
+async def gamepad_send_buttons(dut, buttons):
+    dut.ui_in.value = 0
+    await ClockCycles(dut.clk, 4)
+
+    for bit_index in range(11, -1, -1):
+        bit = (buttons >> bit_index) & 1
+        dut.ui_in.value = PMOD_DATA if bit else 0
+        await ClockCycles(dut.clk, 4)
+        dut.ui_in.value = (PMOD_DATA if bit else 0) | PMOD_CLK
+        await ClockCycles(dut.clk, 4)
+        dut.ui_in.value = PMOD_DATA if bit else 0
+        await ClockCycles(dut.clk, 4)
+
+    dut.ui_in.value = PMOD_LATCH
+    await ClockCycles(dut.clk, 4)
+    dut.ui_in.value = 0
+    await ClockCycles(dut.clk, 4)
+    
 @cocotb.test()
 async def test_project(dut):
     dut._log.info("Start")
@@ -23,18 +64,44 @@ async def test_project(dut):
     await ClockCycles(dut.clk, 10)
     dut.rst_n.value = 1
 
+    await ClockCycles(dut.clk, 5)
+
     dut._log.info("Test project behavior")
 
-    # Set the input values you want to test
-    dut.ui_in.value = 20
-    dut.uio_in.value = 30
+    assert int(dut.uio_oe.value) == 0x80
 
-    # Wait for one clock cycle to see the output values
-    await ClockCycles(dut.clk, 1)
+    assert get_hsync(dut.uo_out.value) == 1
+    assert get_vsync(dut.uo_out.value) == 1
 
-    # The following assersion is just an example of how to check the output values.
-    # Change it to match the actual expected output of your module:
-    assert dut.uo_out.value == 50
+    hsync_seen_high = False
+    hsync_seen_low = False
 
-    # Keep testing the module by changing the input values, waiting for
-    # one or more clock cycles, and asserting the expected output values.
+    for _ in range(800):
+        await ClockCycles(dut.clk, 1)
+        hsync = get_hsync(dut.uo_out.value)
+
+        if hsync:
+            hsync_seen_high = True
+        else:
+            hsync_seen_low = True
+
+    assert hsync_seen_high
+    assert hsync_seen_low
+
+    dut._log.info("Send START button through ui_in gamepad pins")
+
+    await gamepad_send_buttons(dut, BTN_START)
+
+    # game_state only samples buttons on frame_tick.
+    # One VGA frame is 800 * 525 clock cycles.
+    await ClockCycles(dut.clk, 800 * 525 + 10)
+
+    assert int(dut.u_game_state.state.value) == 1
+
+    dut._log.info("Send Up button through ui_in gamepad pins")
+
+    await gamepad_send_buttons(dut, BTN_UP)
+
+    await ClockCycles(dut.clk, 800 * 525 + 10)
+
+    assert int(dut.u_game_state.player_y.value) < 84
