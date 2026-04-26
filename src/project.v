@@ -304,8 +304,8 @@ module game_state (
     wire jump_edge  = jump_btn && !jump_prev;
     wire start_edge = start_btn && !start_prev;
 
-    assign game_over = state == S_GAME_OVER;
-    assign ducking = (state == S_RUN) && duck_btn && (player_y == GROUND_Y);
+    assign game_over = state[1];
+    assign ducking = state[0] && duck_btn && (player_y == GROUND_Y);
 
     function [1:0] rand_type;
         input [1:0] bits;
@@ -451,25 +451,18 @@ module game_state (
                             end
                         end
 
-                        if ((obs0_x <= DESPAWN_X) && (obs1_x <= DESPAWN_X)) begin
-                            obs0_x    <= OBS0_START + {5'd0, lfsr[3:0]};
-                            obs1_x    <= OBS1_START + {5'd0, lfsr[7:4]};
+                        if (obs0_x <= DESPAWN_X) begin
+                            obs0_x    <= spawn_after(obs1_x, lfsr[4:0]);
                             obs0_type <= rand_type(lfsr[1:0]);
+                        end else begin
+                            obs0_x <= obs0_x - SPEED_X;
+                        end
+                        
+                        if (obs1_x <= DESPAWN_X) begin
+                            obs1_x    <= spawn_after(obs0_x, lfsr[7:3]);
                             obs1_type <= rand_type(lfsr[5:4]);
                         end else begin
-                            if (obs0_x <= DESPAWN_X) begin
-                                obs0_x    <= spawn_after(obs1_x, lfsr[4:0]);
-                                obs0_type <= rand_type(lfsr[1:0]);
-                            end else begin
-                                obs0_x <= obs0_x - SPEED_X;
-                            end
-
-                            if (obs1_x <= DESPAWN_X) begin
-                                obs1_x    <= spawn_after(obs0_x, lfsr[7:3]);
-                                obs1_type <= rand_type(lfsr[5:4]);
-                            end else begin
-                                obs1_x <= obs1_x - SPEED_X;
-                            end
+                            obs1_x <= obs1_x - SPEED_X;
                         end
 
                         if (jump_edge && (player_y == GROUND_Y)) begin
@@ -605,14 +598,8 @@ module renderer (
     wire obs0_pixel = obs0_near && obstacle_pixel(obs0_type, obs0_dx[3:0], sy);
     wire obs1_pixel = obs1_near && obstacle_pixel(obs1_type, obs1_dx[3:0], sy);
 
-    wire obs_small = ((obs0_type == 2'd0) && obs0_pixel) ||
-                     ((obs1_type == 2'd0) && obs1_pixel);
-
-    wire obs_bird = ((obs0_type == 2'd1) && obs0_pixel) ||
-                    ((obs1_type == 2'd1) && obs1_pixel);
-
-    wire obs_big = ((obs0_type == 2'd2) && obs0_pixel) ||
-                   ((obs1_type == 2'd2) && obs1_pixel);
+    wire       obs_pixel = obs0_pixel || obs1_pixel;
+    wire [1:0] obs_type  = obs0_pixel ? obs0_type : obs1_type;
 
     wire cloud =
         (
@@ -654,12 +641,13 @@ module renderer (
                 rgb = 6'b000000;
             else if (cloud || player_eye)
                 rgb = 6'b111111;
-            else if (obs_small)
-                rgb = 6'b101010;
-            else if (obs_big)
-                rgb = 6'b010101;
-            else if (obs_bird)
-                rgb = 6'b000000;
+            else if (obs_pixel) begin
+                case (obs_type)
+                    2'd0:    rgb = 6'b101010;
+                    2'd1:    rgb = 6'b000000;
+                    default: rgb = 6'b010101;
+                endcase
+            end
             else if (player || player_head || player_leg_l || player_leg_r)
                 rgb = 6'b100000;
             else if (ground)
