@@ -267,7 +267,7 @@ module game_state (
 
     output reg  [8:0] obs0_x,
     output reg  [8:0] obs1_x,
-    output reg  [1:0] obs0_type, //0 = small rock, 1 = bird, 2 = big rock,
+    output reg  [1:0] obs0_type, // 0 = small rock, 1 = bird, 2 = big rock
     output reg  [1:0] obs1_type,
 
     output reg  [7:0] cloud_x,
@@ -351,19 +351,24 @@ module game_state (
         end
     endtask
 
-    wire [8:0] player_left  = 9'd20;
-    wire [8:0] player_right = 9'd28;
-
     wire [6:0] player_top    = ducking ? player_y + 7'd8 : player_y;
     wire [6:0] player_bottom = player_y + 7'd16;
 
-    wire [8:0] obs0_width = (obs0_type == 2'd2) ? 9'd10 :
-                            (obs0_type == 2'd1) ? 9'd8  :
-                                                   9'd6;
+    wire obs0_horiz =
+        (obs0_x < 9'd28) &&
+        (
+            (obs0_type == 2'd2) ? (obs0_x >= 9'd11) :
+            (obs0_type == 2'd1) ? (obs0_x >= 9'd13) :
+                                  (obs0_x >= 9'd15)
+        );
 
-    wire [8:0] obs1_width = (obs1_type == 2'd2) ? 9'd10 :
-                            (obs1_type == 2'd1) ? 9'd8  :
-                                                   9'd6;
+    wire obs1_horiz =
+        (obs1_x < 9'd28) &&
+        (
+            (obs1_type == 2'd2) ? (obs1_x >= 9'd11) :
+            (obs1_type == 2'd1) ? (obs1_x >= 9'd13) :
+                                  (obs1_x >= 9'd15)
+        );
 
     wire [6:0] obs0_top = (obs0_type == 2'd1) ? 7'd80 :
                           (obs0_type == 2'd2) ? 7'd90 :
@@ -376,18 +381,13 @@ module game_state (
     wire [6:0] obs0_bottom = (obs0_type == 2'd1) ? 7'd86 : 7'd100;
     wire [6:0] obs1_bottom = (obs1_type == 2'd1) ? 7'd86 : 7'd100;
 
-    wire [8:0] obs0_right = obs0_x + obs0_width;
-    wire [8:0] obs1_right = obs1_x + obs1_width;
-
     wire hit_obs0 =
-        (player_left   < obs0_right) &&
-        (player_right  > obs0_x) &&
+        obs0_horiz &&
         (player_top    < obs0_bottom) &&
         (player_bottom > obs0_top);
 
     wire hit_obs1 =
-        (player_left   < obs1_right) &&
-        (player_right  > obs1_x) &&
+        obs1_horiz &&
         (player_top    < obs1_bottom) &&
         (player_bottom > obs1_top);
 
@@ -647,29 +647,32 @@ module renderer (
     always @* begin
         rgb = 6'b000000;
 
-        if (visible && game_over_border)
-            rgb = 6'b110000;
-        else if (visible && player_iris)
-            rgb = 6'b000000;
-        else if (visible && (cloud || player_eye))
-            rgb = 6'b111111;
-        else if (visible && obs_small)
-            rgb = 6'b101010;
-        else if (visible && obs_big)
-            rgb = 6'b010101;
-        else if (visible && obs_bird)
-            rgb = 6'b000000;
-        else if (visible && (player || player_head || player_leg_l || player_leg_r))
-            rgb = 6'b100000;
-        else if (visible && ground)
-            rgb = 6'b000100;
-        else if (visible && under_ground)
-            rgb = 6'b100100;
-        else if (visible)
-            rgb = 6'b011011;
+        if (visible) begin
+            if (game_over_border)
+                rgb = 6'b110000;
+            else if (player_iris)
+                rgb = 6'b000000;
+            else if (cloud || player_eye)
+                rgb = 6'b111111;
+            else if (obs_small)
+                rgb = 6'b101010;
+            else if (obs_big)
+                rgb = 6'b010101;
+            else if (obs_bird)
+                rgb = 6'b000000;
+            else if (player || player_head || player_leg_l || player_leg_r)
+                rgb = 6'b100000;
+            else if (ground)
+                rgb = 6'b000100;
+            else if (under_ground)
+                rgb = 6'b100100;
+            else
+                rgb = 6'b011011;
+        end
     end
 
 endmodule
+
 
 module audio_engine (
     input  wire clk,
@@ -680,10 +683,9 @@ module audio_engine (
     output reg  audio_pwm
 );
 
-    localparam [11:0] H_REST = 12'd0;
-    localparam [11:0] H_A2   = 12'd3551;
-    localparam [11:0] H_B2   = 12'd3164;
-    localparam [11:0] H_C3   = 12'd2986;
+    localparam [11:0] H_A2 = 12'd3551;
+    localparam [11:0] H_B2 = 12'd3164;
+    localparam [11:0] H_C3 = 12'd2986;
     localparam [2:0] STEP_FRAMES = 3'd7;
 
     reg [2:0] frame_div;
@@ -691,24 +693,22 @@ module audio_engine (
     reg       game_prev;
     reg       game_beep;
     reg [11:0] tone_cnt;
-    reg [11:0] half_period;
 
-    always @* begin
-        if (game_beep) begin
-            half_period = H_A2;
-        end else begin
-            case (idx)
-                3'd0: half_period = H_A2;
-                3'd1: half_period = H_REST;
-                3'd2: half_period = H_B2;
-                3'd3: half_period = H_A2;
-                3'd4: half_period = H_REST;
-                3'd5: half_period = H_C3;
-                3'd6: half_period = H_B2;
-                default: half_period = H_REST;
-            endcase
-        end
-    end
+    wire idx_b2 = (idx == 3'd2) || (idx == 3'd6);
+    wire idx_c3 = (idx == 3'd5);
+
+    wire music_rest =
+        (idx == 3'd1) ||
+        (idx == 3'd4) ||
+        (idx == 3'd7);
+
+    wire tone_on = game_beep || (!game_over && !music_rest);
+
+    wire [11:0] half_period =
+        game_beep ? H_A2 :
+        idx_c3    ? H_C3 :
+        idx_b2    ? H_B2 :
+                    H_A2;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -731,6 +731,7 @@ module audio_engine (
             if (frame_tick) begin
                 if (frame_div == STEP_FRAMES - 3'd1) begin
                     frame_div <= 3'd0;
+
                     if (game_beep)
                         game_beep <= 1'b0;
                     else if (!game_over)
@@ -741,7 +742,7 @@ module audio_engine (
             end
 
             if (audio_tick) begin
-                if ((half_period == H_REST) || (game_over && !game_beep)) begin
+                if (!tone_on) begin
                     tone_cnt  <= 12'd0;
                     audio_pwm <= 1'b0;
                 end else if (tone_cnt >= half_period) begin
