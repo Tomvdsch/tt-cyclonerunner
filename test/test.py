@@ -96,7 +96,7 @@ async def test_project(dut):
     # One VGA frame is 800 * 525 clock cycles.
     await ClockCycles(dut.clk, 800 * 525 + 10)
 
-    assert int(dut.u_game_state.state.value) == 1
+    assert int(dut.user_project.u_game_state.state.value) == 1
 
     dut._log.info("Send Up button through ui_in gamepad pins")
 
@@ -104,4 +104,4 @@ async def test_project(dut):
 
     await ClockCycles(dut.clk, 800 * 525 + 10)
 
-    assert int(dut.u_game_state.player_y.value) < 84
+    assert int(dut.user_project.u_game_state.player_y.value) < 84
