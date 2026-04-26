@@ -47,9 +47,9 @@ module tt_um_tomvdsch_cyclonerunner (
         .r          (gamepad_r)
     );
 
-    wire jump_btn  = gamepad_a | gamepad_b | gamepad_up;
-    wire duck_btn  = gamepad_down | gamepad_y;
-    wire start_btn = gamepad_start | gamepad_select;
+    wire jump_btn  = gamepad_up;
+    wire duck_btn  = gamepad_down;
+    wire start_btn = gamepad_start;
 
     wire [9:0] pix_x;
     wire [9:0] pix_y;
