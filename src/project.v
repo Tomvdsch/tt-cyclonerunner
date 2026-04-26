@@ -136,11 +136,6 @@ module tt_um_tomvdsch_cyclonerunner (
         ui_in[3:0],
         ui_in[7],
         gamepad_is_present,
-        gamepad_left,
-        gamepad_right,
-        gamepad_x,
-        gamepad_l,
-        gamepad_r,
         1'b0
     };
 
