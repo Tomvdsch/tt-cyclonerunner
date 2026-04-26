@@ -279,9 +279,9 @@ module game_state (
     localparam [1:0] S_GAME_OVER = 2'd2;
 
     localparam [6:0] GROUND_Y   = 7'd84;
-    localparam [6:0] JUMP_BOOST = 7'd6;
+    localparam [6:0] JUMP_BOOST = 7'd5;
 
-    localparam signed [7:0] JUMP_VY = -8'sd5;
+    localparam signed [7:0] JUMP_VY = -8'sd4;
 
     localparam [8:0] OBS0_START = 9'd180;
     localparam [8:0] OBS1_START = 9'd255;
