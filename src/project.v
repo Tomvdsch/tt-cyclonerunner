@@ -11,7 +11,6 @@ module tt_um_tomvdsch_cyclonerunner (
 
     wire core_rst_n = rst_n & ena;
 
-    wire gamepad_is_present;
     wire gamepad_start;
     wire gamepad_up;
     wire gamepad_down;
@@ -23,7 +22,6 @@ module tt_um_tomvdsch_cyclonerunner (
         .pmod_clk   (ui_in[5]),
         .pmod_latch (ui_in[4]),
     
-        .is_present (gamepad_is_present),
         .start      (gamepad_start),
         .up         (gamepad_up),
         .down       (gamepad_down)
@@ -135,7 +133,6 @@ module tt_um_tomvdsch_cyclonerunner (
         uio_in,
         ui_in[3:0],
         ui_in[7],
-        gamepad_is_present,
         1'b0
     };
 
@@ -149,7 +146,6 @@ module gamepad_pmod_single (
     input  wire pmod_clk,
     input  wire pmod_latch,
 
-    output wire is_present,
     output wire start,
     output wire up,
     output wire down
@@ -162,14 +158,12 @@ module gamepad_pmod_single (
     reg clk_last;
     reg latch_last;
 
-    reg [8:0] shift_reg;
-    reg [2:0] buttons;
-    reg       present;
+    reg [11:0] shift_reg;
+    reg [2:0]  buttons;
 
     wire clk_rise   = clk_sync[1] & ~clk_last;
     wire latch_rise = latch_sync[1] & ~latch_last;
-
-    wire empty = shift_reg == 9'h1ff;
+    wire empty      = shift_reg == 12'hfff;
 
     always @(posedge clk) begin
         if (!rst_n) begin
@@ -187,24 +181,20 @@ module gamepad_pmod_single (
         if (!rst_n) begin
             clk_last   <= 1'b0;
             latch_last <= 1'b0;
-            shift_reg  <= 9'h1ff;
+            shift_reg  <= 12'hfff;
             buttons    <= 3'b000;
-            present    <= 1'b0;
         end else begin
             clk_last   <= clk_sync[1];
             latch_last <= latch_sync[1];
 
             if (clk_rise)
-                shift_reg <= {shift_reg[7:0], data_sync[1]};
+                shift_reg <= {shift_reg[10:0], data_sync[1]};
 
-            if (latch_rise) begin
-                present <= !empty;
+            if (latch_rise)
                 buttons <= empty ? 3'b000 : shift_reg[8:6];
-            end
         end
     end
 
-    assign is_present = present;
     assign {start, up, down} = buttons;
 
 endmodule
