@@ -25,9 +25,15 @@ BTN_R      = 1 << 0
 def get_hsync(uo_out):
     return (int(uo_out) >> 7) & 1
 
-
 def get_vsync(uo_out):
     return (int(uo_out) >> 3) & 1
+
+def has_rtl_game_state(dut):
+    try:
+        _ = dut.user_project.u_game_state
+        return True
+    except AttributeError:
+        return False
 
 async def gamepad_send_buttons(dut, buttons):
     dut.ui_in.value = 0
@@ -35,33 +41,39 @@ async def gamepad_send_buttons(dut, buttons):
 
     for bit_index in range(11, -1, -1):
         bit = (buttons >> bit_index) & 1
+
         dut.ui_in.value = PMOD_DATA if bit else 0
         await ClockCycles(dut.clk, 4)
+
         dut.ui_in.value = (PMOD_DATA if bit else 0) | PMOD_CLK
         await ClockCycles(dut.clk, 4)
+
         dut.ui_in.value = PMOD_DATA if bit else 0
         await ClockCycles(dut.clk, 4)
 
     dut.ui_in.value = PMOD_LATCH
     await ClockCycles(dut.clk, 4)
+
     dut.ui_in.value = 0
     await ClockCycles(dut.clk, 4)
-    
+
 @cocotb.test()
 async def test_project(dut):
     dut._log.info("Start")
 
-    # Set the clock period to 10 us (100 KHz)
+    # Set the clock period to 10 us, 100 KHz.
     clock = Clock(dut.clk, 10, unit="us")
     cocotb.start_soon(clock.start())
 
-    # Reset
+    # Reset.
     dut._log.info("Reset")
     dut.ena.value = 1
     dut.ui_in.value = 0
     dut.uio_in.value = 0
     dut.rst_n.value = 0
+
     await ClockCycles(dut.clk, 10)
+
     dut.rst_n.value = 1
 
     await ClockCycles(dut.clk, 5)
@@ -96,12 +108,18 @@ async def test_project(dut):
     # One VGA frame is 800 * 525 clock cycles.
     await ClockCycles(dut.clk, 800 * 525 + 10)
 
-    assert int(dut.user_project.u_game_state.state.value) == 1
+    if has_rtl_game_state(dut):
+        assert int(dut.user_project.u_game_state.state.value) == 1
+    else:
+        dut._log.info("Skipping internal state check in gate-level simulation")
 
-    dut._log.info("Send Up button through ui_in gamepad pins")
+    dut._log.info("Send UP button through ui_in gamepad pins")
 
     await gamepad_send_buttons(dut, BTN_UP)
 
     await ClockCycles(dut.clk, 800 * 525 + 10)
 
-    assert int(dut.user_project.u_game_state.player_y.value) < 84
+    if has_rtl_game_state(dut):
+        assert int(dut.user_project.u_game_state.player_y.value) < 84
+    else:
+        dut._log.info("Skipping internal player_y check in gate-level simulation")
