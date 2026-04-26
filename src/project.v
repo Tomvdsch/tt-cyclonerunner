@@ -732,6 +732,7 @@ module audio_engine (
     reg [2:0] idx;
     reg       game_prev;
     reg       game_beep;
+    reg       rand_bit;
     reg [11:0] tone_cnt;
     reg [11:0] half_period;
 
@@ -742,11 +743,11 @@ module audio_engine (
             case (idx)
                 3'd0: half_period = H_A2;
                 3'd1: half_period = H_REST;
-                3'd2: half_period = H_B2;
+                3'd2: half_period = rand_bit ? H_B2 : H_A2;
                 3'd3: half_period = H_A2;
                 3'd4: half_period = H_REST;
                 3'd5: half_period = H_C3;
-                3'd6: half_period = H_B2;
+                3'd6: half_period = rand_bit ? H_A2 : H_B2;
                 default: half_period = H_REST;
             endcase
         end
@@ -758,6 +759,7 @@ module audio_engine (
             frame_div <= 3'd0;
             game_prev <= 1'b0;
             game_beep <= 1'b0;
+            rand_bit  <= 1'b0;
             tone_cnt  <= 12'd0;
             audio_pwm <= 1'b0;
         end else begin
@@ -773,7 +775,7 @@ module audio_engine (
             if (frame_tick) begin
                 if (frame_div == STEP_FRAMES - 3'd1) begin
                     frame_div <= 3'd0;
-
+                    rand_bit  <= rand_bit ^ idx[0] ^ game_over;
                     if (game_beep)
                         game_beep <= 1'b0;
                     else if (!game_over)
