@@ -9,12 +9,18 @@ You can also include images in this folder and reference them in the markdown. E
 
 ## How it works
 
-Explain how your project works
+The project is a demo runner game. You will have to try to avoid hitting any obstacles that come near the character. There are 3 possible obstacles, small rock, big rock and a bird. You can jump or crouch to avoid hitting these abstacles. Once you hit a obstacle the game will end.
 
 ## How to test
 
-Explain how to use your project
+Once the game is loaded use the start button on the gamepad controller to start the game. You will start hearing background sounds and the map will start moving. Use the up and down buttons to dodge obstacles. If you hit an obstacle a red border should appear around the screen and a gameover sound should be played. Once you hit the gameover state you can restart the game again with the start button.
+
+- Up = Jump
+- Down = Crouch
+- Start = Restart/Start
 
 ## External hardware
 
-List external hardware used in your project (e.g. PMOD, LED display, etc), if any
+- VGA Pmod
+- Gamepad Pmod
+- Audio Pmod
