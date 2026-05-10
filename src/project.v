@@ -130,18 +130,8 @@ module tt_um_tomvdsch_cyclonerunner (
     assign uo_out[5] = rgb[2];
     assign uo_out[6] = rgb[0];
     assign uo_out[7] = hsync;
-//    assign uio_out = {audio_pwm, 7'b0000000};
-//    assign uio_oe  = 8'b10000000;
-    assign uio_out[0] = 1'b0;
-    assign uio_out[1] = 1'b0;
-    assign uio_out[2] = 1'b0;
-    assign uio_out[3] = 1'b0;
-    assign uio_out[4] = 1'b0;
-    assign uio_out[5] = 1'b0;
-    assign uio_out[6] = 1'b0;
-    assign uio_out[7] = audio_pwm;
-
-    assign uio_oe = 8'b11111111;
+    assign uio_out = {audio_pwm, 7'b0000000};
+    assign uio_oe  = 8'b10000000;
 
     wire unused = &{
         uio_in,
